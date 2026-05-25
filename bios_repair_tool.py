@@ -1,3 +1,11 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+BIOS Repair Tool - GUI Application
+For ideapad/thinkbook BIOS repair and extraction
+Author: hariszubaida47-sudo
+"""
+
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import os
@@ -6,6 +14,8 @@ from pathlib import Path
 import struct
 import json
 from datetime import datetime
+import shutil
+
 
 class BIOSRepairTool:
     def __init__(self, root):
@@ -32,9 +42,13 @@ class BIOSRepairTool:
         
     def ensure_output_directory(self):
         """Pastikan output directory ada"""
-        os.makedirs(self.output_dir.get(), exist_ok=True)
+        try:
+            os.makedirs(self.output_dir.get(), exist_ok=True)
+        except Exception as e:
+            self.log(f"⚠ Error creating output directory: {str(e)}")
         
     def create_widgets(self):
+        """Create all GUI widgets"""
         # Main container
         main_frame = ttk.Frame(self.root, padding="10")
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
@@ -159,20 +173,23 @@ class BIOSRepairTool:
         self.tree.bind("<Double-1>", self.on_treeview_double_click)
         
     def select_exe_file(self):
+        """Select EXE file"""
         file = filedialog.askopenfilename(filetypes=[("EXE files", "*.exe"), ("All files", "*.*")])
         if file:
             self.file_path.set(file)
             self.log("✓ Selected EXE file: " + os.path.basename(file))
+            self.analyze_bios_file(file)
     
     def select_bin_file(self):
+        """Select BIN file"""
         file = filedialog.askopenfilename(filetypes=[("BIN files", "*.bin"), ("All files", "*.*")])
         if file:
             self.file_path.set(file)
             self.log("✓ Selected BIN file: " + os.path.basename(file))
-            # Analisis file BIOS
             self.analyze_bios_file(file)
     
     def select_output_dir(self):
+        """Select output directory"""
         dir_path = filedialog.askdirectory()
         if dir_path:
             self.output_dir.set(dir_path)
@@ -180,7 +197,7 @@ class BIOSRepairTool:
             self.log("✓ Output directory changed to: " + dir_path)
     
     def analyze_bios_file(self, file_path):
-        """Analisis file BIOS untuk mendapatkan info"""
+        """Analyze BIOS file for info"""
         try:
             file_size = os.path.getsize(file_path) / 1024  # KB
             creation_time = os.path.getctime(file_path)
@@ -192,13 +209,16 @@ class BIOSRepairTool:
             self.log(f"⚠ Could not analyze file: {str(e)}")
     
     def log(self, message):
+        """Add message to log"""
         self.log_text.config(state='normal')
         timestamp = datetime.now().strftime("%H:%M:%S")
         self.log_text.insert(tk.END, f"[{timestamp}] {message}\n")
         self.log_text.see(tk.END)
         self.log_text.config(state='disabled')
+        self.root.update()
     
     def repair_original(self):
+        """Start repair process"""
         if not self.file_path.get():
             messagebox.showerror("Error", "Please select a file first!")
             return
@@ -208,6 +228,7 @@ class BIOSRepairTool:
         thread.start()
     
     def extract_only(self):
+        """Start extract process"""
         if not self.file_path.get():
             messagebox.showerror("Error", "Please select a file first!")
             return
@@ -217,11 +238,13 @@ class BIOSRepairTool:
         thread.start()
     
     def process_dmi(self):
+        """Start DMI process"""
         thread = threading.Thread(target=self._dmi_process)
         thread.daemon = True
         thread.start()
     
     def _repair_process(self):
+        """Repair process thread"""
         self.progress_bar.start()
         try:
             file_path = self.file_path.get()
@@ -305,6 +328,7 @@ class BIOSRepairTool:
             self.progress_bar.stop()
     
     def _extract_process(self):
+        """Extract process thread"""
         self.progress_bar.start()
         try:
             file_path = self.file_path.get()
@@ -351,6 +375,7 @@ class BIOSRepairTool:
             self.progress_bar.stop()
     
     def _dmi_process(self):
+        """DMI process thread"""
         self.progress_bar.start()
         try:
             if not self.file_path.get():
@@ -412,13 +437,13 @@ class BIOSRepairTool:
         return data[:] if len(data) > 0 else data
     
     def _add_padding(self, data):
-        """Add padding ke data"""
+        """Add padding to data"""
         target_size = (len(data) + 4095) // 4096 * 4096  # Round to 4KB
         padding = bytearray(target_size - len(data))
         return data + padding
     
     def _extract_dmi_data(self, bios_data):
-        """Extract DMI data dari BIOS"""
+        """Extract DMI data from BIOS"""
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             dmi_info = {
@@ -445,7 +470,7 @@ class BIOSRepairTool:
             return None
     
     def _extract_dmi_from_bios(self, bios_data):
-        """Extract DMI info dari BIOS"""
+        """Extract DMI info from BIOS"""
         dmi_info = {
             "bios_size": len(bios_data),
             "dmi_signature_found": b'_DMI_' in bios_data,
@@ -455,7 +480,7 @@ class BIOSRepairTool:
         return dmi_info
     
     def _add_to_results(self, file_path, file_type):
-        """Add file ke hasil list"""
+        """Add file to results list"""
         try:
             file_name = os.path.basename(file_path)
             file_size = os.path.getsize(file_path) / 1024  # KB
@@ -466,7 +491,7 @@ class BIOSRepairTool:
             self.log(f"⚠ Error adding to results: {str(e)}")
     
     def on_treeview_double_click(self, event):
-        """Handle double click pada treeview"""
+        """Handle double click on treeview"""
         selection = self.tree.selection()
         if selection:
             item = selection[0]
@@ -477,17 +502,20 @@ class BIOSRepairTool:
                 import subprocess
                 import sys
                 
-                if sys.platform == 'win32':
-                    os.startfile(file_path)
-                elif sys.platform == 'darwin':
-                    subprocess.Popen(['open', file_path])
-                else:
-                    subprocess.Popen(['xdg-open', file_path])
-                
-                self.log(f"📂 Opened: {file_name}")
+                try:
+                    if sys.platform == 'win32':
+                        os.startfile(file_path)
+                    elif sys.platform == 'darwin':
+                        subprocess.Popen(['open', file_path])
+                    else:
+                        subprocess.Popen(['xdg-open', file_path])
+                    
+                    self.log(f"📂 Opened: {file_name}")
+                except Exception as e:
+                    messagebox.showerror("Error", f"Could not open file:\n{str(e)}")
     
     def open_output_folder(self):
-        """Buka output folder"""
+        """Open output folder"""
         output_path = self.output_dir.get()
         self.ensure_output_directory()
         
@@ -508,6 +536,7 @@ class BIOSRepairTool:
 
 
 def main():
+    """Main entry point"""
     root = tk.Tk()
     app = BIOSRepairTool(root)
     root.mainloop()
